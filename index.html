@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mystery of the Ancient Temple - A Text Adventure</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #0c0c0c;
+            color: #00ff00;
+            line-height: 1.6;
+        }
+        h1 {
+            text-align: center;
+            color: #00ff00;
+            margin-bottom: 30px;
+            text-shadow: 0 0 5px #00ff00;
+        }
+        #game-container {
+            background-color: #111;
+            border: 2px solid #00ff00;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px #00ff00;
+        }
+        #story {
+            margin-bottom: 20px;
+            min-height: 200px;
+        }
+        #options {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        button {
+            background-color: #111;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            padding: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-family: 'Courier New', monospace;
+            text-align: left;
+        }
+        button:hover {
+            background-color: #00ff00;
+            color: #111;
+        }
+        #inventory {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #00ff00;
+            display: none;
+        }
+        #inventory h3 {
+            margin-top: 0;
+        }
+        #inventory-items {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        .typing {
+            overflow: hidden;
+            white-space: nowrap;
+            margin: 0;
+            animation: typing 3s steps(40, end);
+        }
+        @keyframes typing {
+            from { width: 0 }
+            to { width: 100% }
+        }
+        #header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        #stats {
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <h1>Mystery of the Ancient Temple</h1>
+    <div id="game-container">
+        <div id="header">
+            <div id="stats">
+                Health: <span id="health">100</span> | 
+                Score: <span id="score">0</span>
+            </div>
+            <button id="inventory-toggle">Show Inventory</button>
+        </div>
+        
+        <div id="story"></div>
+        
+        <div id="options"></div>
+        
+        <div id="inventory">
+            <h3>Inventory</h3>
+            <ul id="inventory-items"></ul>
+        </div>
+    </div>
+
+    <script>
+        // Game state
+        const gameState = {
+            health: 100,
+            score: 0,
+            inventory: [],
+            visitedScenes: new Set()
+        };
+
+        // Game scenes
+        const scenes = {
+            start: {
+                text: "You stand at the entrance of an ancient temple hidden deep in the jungle. The stone doorway is covered in vines and mysterious carvings. A cool breeze flows from inside the dark entrance. What will you do?",
+                options: [
+                    { text: "Enter the temple cautiously", nextScene: "entranceHall" },
+                    { text: "Examine the carvings on the doorway", nextScene: "examineCarving" },
+                    { text: "Check your backpack", nextScene: "checkBackpack" }
+                ]
+            },
+            examineCarving: {
+                text: "You examine the intricate carvings. They appear to depict an ancient civilization worshipping a celestial object. Among the symbols, you notice a recurring pattern of a sun with seven rays. This might be important.",
+                options: [
+                    { text: "Make a mental note and enter the temple", nextScene: "entranceHall" },
+                    { text: "Try to press the sun symbol", nextScene: "pressSunSymbol" },
+                    { text: "Return to the entrance", nextScene: "start" }
+                ],
+                onVisit: () => {
+                    updateScore(10);
+                }
+            },
+            pressSunSymbol: {
+                text: "As you press the sun symbol, you hear a faint click. A small compartment opens, revealing a small golden key. You place it in your pocket.",
+                options: [
+                    { text: "Enter the temple", nextScene: "entranceHall" }
+                ],
+                onVisit: () => {
+                    addToInventory("Golden Key");
+                    updateScore(20);
+                }
+            },
+            checkBackpack: {
+                text: "You open your backpack and check your supplies. You have a flashlight, a notebook, a water bottle, and a small pocket knife.",
+                options: [
+                    { text: "Take out the flashlight", nextScene: "takeFlashlight" },
+                    { text: "Return to the entrance", nextScene: "start" }
+                ]
+            },
+            takeFlashlight: {
+                text: "You take out the flashlight and turn it on. It will be useful in the dark temple.",
+                options: [
+                    { text: "Enter the temple with the flashlight", nextScene: "entranceHallWithLight" }
+                ],
+                onVisit: () => {
+                    addToInventory("Flashlight");
+                }
+            },
+            entranceHall: {
+                text: "You step into the temple. It's dark and musty. You can barely make out your surroundings. There are passages leading left and right, and a large door straight ahead. You hear a faint dripping sound.",
+                options: [
+                    { text: "Go left", nextScene: "leftPassage" },
+                    { text: "Go right", nextScene: "rightPassage" },
+                    { text: "Try the door ahead", nextScene: "centralDoorNoLight" },
+                    { text: "Return outside", nextScene: "start" }
+                ],
+                checkCondition: () => {
+                    if (gameState.inventory.includes("Flashlight")) {
+                        return "entranceHallWithLight";
+                    }
+                    return null;
+                }
+            },
+            entranceHallWithLight: {
+                text: "With your flashlight, you can see the entrance hall clearly. The walls are adorned with faded murals depicting an ancient civilization. There are passages leading left and right, and a large ornate door straight ahead with a keyhole shaped like a sun.",
+                options: [
+                    { text: "Go left", nextScene: "leftPassage" },
+                    { text: "Go right", nextScene: "rightPassage" },
+                    { text: "Examine the central door", nextScene: "centralDoor" },
+                    { text: "Return outside", nextScene: "start" }
+                ]
+            },
+            centralDoorNoLight: {
+                text: "You approach the door but it's too dark to see any details. You fumble around and can feel an indentation that might be a keyhole, but can't see its shape. You need a light source.",
+                options: [
+                    { text: "Go back to the entrance hall", nextScene: "entranceHall" }
+                ]
+            },
+            centralDoor: {
+                text: "You examine the central door. It's made of heavy stone with a large keyhole shaped like the sun symbol you saw outside. The door doesn't budge when you push it.",
+                options: [
+                    { text: "Try to use the golden key", nextScene: "useGoldenKey", condition: () => gameState.inventory.includes("Golden Key") },
+                    { text: "Go back", nextScene: "entranceHallWithLight" }
+                ]
+            },
+            useGoldenKey: {
+                text: "You insert the golden key into the sun-shaped keyhole. It fits perfectly! As you turn it, the door rumbles and slowly slides open, revealing a treasure chamber filled with golden artifacts and jewels. Congratulations! You've discovered the temple's secret treasure!",
+                options: [
+                    { text: "Play Again", nextScene: "start" }
+                ],
+                onVisit: () => {
+                    updateScore(100);
+                    resetGame();
+                }
+            },
+            leftPassage: {
+                text: "You follow the left passage. The air feels damper here. After a few turns, you find yourself in a small chamber with a pool of water. The water glows with an unnatural blue light.",
+                options: [
+                    { text: "Examine the pool", nextScene: "examinePool" },
+                    { text: "Return to the entrance hall", nextScene: "entranceHall" }
+                ]
+            },
+            examinePool: {
+                text: "As you approach the glowing pool, you notice ancient scriptures carved around its edge. They seem to tell a story about a sacred water source that grants wisdom. At the bottom of the pool, you spot something shiny.",
+                options: [
+                    { text: "Reach into the pool", nextScene: "reachIntoPool" },
+                    { text: "Drink from the pool", nextScene: "drinkFromPool" },
+                    { text: "Return to the left passage", nextScene: "leftPassage" }
+                ]
+            },
+            reachIntoPool: {
+                text: "You reach into the cool water and pull out an ancient medallion with the sun symbol engraved on it. As you take it, the blue glow in the pool fades.",
+                options: [
+                    { text: "Return to the entrance hall", nextScene: "entranceHall" }
+                ],
+                onVisit: () => {
+                    addToInventory("Sun Medallion");
+                    updateScore(30);
+                }
+            },
+            drinkFromPool: {
+                text: "You scoop up some water and drink it. It tastes sweet but leaves a strange aftertaste. Suddenly, your head spins and you feel weak. The water was poisonous! You lose some health.",
+                options: [
+                    { text: "Return to the entrance hall, feeling ill", nextScene: "entranceHall" }
+                ],
+                onVisit: () => {
+                    updateHealth(-30);
+                }
+            },
+            rightPassage: {
+                text: "You follow the right passage and arrive at a chamber with three stone pedestals. Each pedestal has a different symbol: a sun, a moon, and a star. There's an inscription that reads 'Place the offering on the altar of the day-ruler.'",
+                options: [
+                    { text: "Place something on the sun pedestal", nextScene: "sunPedestal", condition: () => gameState.inventory.includes("Sun Medallion") },
+                    { text: "Place something on the moon pedestal", nextScene: "moonPedestal", condition: () => gameState.inventory.includes("Sun Medallion") },
+                    { text: "Place something on the star pedestal", nextScene: "starPedestal", condition: () => gameState.inventory.includes("Sun Medallion") },
+                    { text: "Return to the entrance hall", nextScene: "entranceHall" }
+                ]
+            },
+            sunPedestal: {
+                text: "You place the sun medallion on the sun pedestal. It fits perfectly! The pedestal glows brightly, and you hear a mechanism activating somewhere in the temple. The pedestal sinks into the ground, taking the medallion with it.",
+                options: [
+                    { text: "Return to the entrance hall", nextScene: "entranceHall" }
+                ],
+                onVisit: () => {
+                    removeFromInventory("Sun Medallion");
+                    updateScore(50);
+                    gameState.sunPedestalActivated = true;
+                }
+            },
+            moonPedestal: {
+                text: "You place the sun medallion on the moon pedestal. As soon as it touches the surface, spikes shoot out from the walls! You quickly duck but get scratched. The medallion falls on the floor.",
+                options: [
+                    { text: "Pick up the medallion and return to the entrance hall", nextScene: "entranceHall" }
+                ],
+                onVisit: () => {
+                    updateHealth(-20);
+                }
+            },
+            starPedestal: {
+                text: "You place the sun medallion on the star pedestal. Nothing happens. The medallion just sits there awkwardly, clearly not meant for this pedestal.",
+                options: [
+                    { text: "Take back the medallion", nextScene: "rightPassage" }
+                ]
+            }
+        };
+
+        // DOM elements
+        const storyElement = document.getElementById('story');
+        const optionsElement = document.getElementById('options');
+        const healthElement = document.getElementById('health');
+        const scoreElement = document.getElementById('score');
+        const inventoryElement = document.getElementById('inventory');
+        const inventoryItemsElement = document.getElementById('inventory-items');
+        const inventoryToggleButton = document.getElementById('inventory-toggle');
+
+        // Toggle inventory display
+        inventoryToggleButton.addEventListener('click', () => {
+            if (inventoryElement.style.display === 'block') {
+                inventoryElement.style.display = 'none';
+                inventoryToggleButton.textContent = 'Show Inventory';
+            } else {
+                inventoryElement.style.display = 'block';
+                inventoryToggleButton.textContent = 'Hide Inventory';
+            }
+        });
+
+        // Update health
+        function updateHealth(change) {
+            gameState.health += change;
+            if (gameState.health > 100) gameState.health = 100;
+            if (gameState.health < 0) gameState.health = 0;
+            healthElement.textContent = gameState.health;
+            
+            if (gameState.health <= 0) {
+                loadScene({
+                    text: "Your health has dropped to zero. You collapse in the temple, too weak to continue. Game Over.",
+                    options: [
+                        { text: "Try Again", nextScene: "start" }
+                    ],
+                    onVisit: resetGame
+                });
+                return true;
+            }
+            return false;
+        }
+
+        // Update score
+        function updateScore(points) {
+            gameState.score += points;
+            scoreElement.textContent = gameState.score;
+        }
+
+        // Add item to inventory
+        function addToInventory(item) {
+            if (!gameState.inventory.includes(item)) {
+                gameState.inventory.push(item);
+                updateInventoryDisplay();
+            }
+        }
+
+        // Remove item from inventory
+        function removeFromInventory(item) {
+            const index = gameState.inventory.indexOf(item);
+            if (index > -1) {
+                gameState.inventory.splice(index, 1);
+                updateInventoryDisplay();
+            }
+        }
+
+        // Update inventory display
+        function updateInventoryDisplay() {
+            inventoryItemsElement.innerHTML = '';
+            if (gameState.inventory.length === 0) {
+                const emptyItem = document.createElement('li');
+                emptyItem.textContent = 'Empty';
+                inventoryItemsElement.appendChild(emptyItem);
+            } else {
+                gameState.inventory.forEach(item => {
+                    const listItem = document.createElement('li');
+                    listItem.textContent = item;
+                    inventoryItemsElement.appendChild(listItem);
+                });
+            }
+        }
+
+        // Load a scene
+        function loadScene(scene) {
+            // Add typing animation effect
+            storyElement.innerHTML = '';
+            storyElement.className = 'typing';
+            
+            // Create and append paragraph with scene text
+            const textParagraph = document.createElement('p');
+            textParagraph.textContent = scene.text;
+            storyElement.appendChild(textParagraph);
+            
+            // Remove animation class after animation completes
+            setTimeout(() => {
+                storyElement.className = '';
+            }, 3000);
+            
+            // Clear and populate options
+            optionsElement.innerHTML = '';
+            scene.options.forEach(option => {
+                if (!option.condition || option.condition()) {
+                    const button = document.createElement('button');
+                    button.textContent = option.text;
+                    button.addEventListener('click', () => {
+                        goToScene(option.nextScene);
+                    });
+                    optionsElement.appendChild(button);
+                }
+            });
+            
+            // Execute onVisit function if it exists
+            if (scene.onVisit) {
+                scene.onVisit();
+            }
+        }
+
+        // Go to a scene
+        function goToScene(sceneId) {
+            // Check if player died
+            if (gameState.health <= 0) {
+                resetGame();
+                loadScene(scenes.start);
+                return;
+            }
+            
+            let scene = scenes[sceneId];
+            
+            // Check if there's a condition that redirects to another scene
+            if (scene.checkCondition) {
+                const redirectSceneId = scene.checkCondition();
+                if (redirectSceneId) {
+                    scene = scenes[redirectSceneId];
+                    sceneId = redirectSceneId;
+                }
+            }
+            
+            // Mark scene as visited
+            gameState.visitedScenes.add(sceneId);
+            
+            // Load the scene
+            loadScene(scene);
+        }
+
+        // Reset game
+        function resetGame() {
+            gameState.health = 100;
+            gameState.inventory = [];
+            gameState.visitedScenes = new Set();
+            updateInventoryDisplay();
+            healthElement.textContent = gameState.health;
+        }
+
+        // Start the game
+        window.onload = function() {
+            updateInventoryDisplay();
+            goToScene('start');
+        };
+    </script>
+</body>
+</html>
